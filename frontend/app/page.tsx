@@ -30,31 +30,31 @@ export default function VibeSelector() {
   // 3. Side Effect: Watch for song changes and play audio
   // 3. Side Effect: Watch for song changes and play audio
   useEffect(() => {
-    if (currentSong && audioRef.current) {
-      const audio = audioRef.current;
+  const audio = audioRef.current;
+  if (!audio) return;
 
-      // 1. Reset the player
-      audio.pause(); 
-      audio.load();
+  // Sync state if audio is paused/played via other means
+  const handlePlay = () => setIsPlaying(true);
+  const handlePause = () => setIsPlaying(false);
 
-      // 2. Play returns a Promise - we need to handle it!
-      const playPromise = audio.play();
+  audio.addEventListener('play', handlePlay);
+  audio.addEventListener('pause', handlePause);
 
-      if (playPromise !== undefined) {
-        playPromise
-          .then(() => {
-            // Automatic playback started!
-            console.log("Playback started successfully");
-            setIsPlaying(true);
-          })
-          .catch((error) => {
-            // Auto-play was prevented or interrupted
-            console.error("Playback failed or was interrupted:", error);
-            setIsPlaying(false);
-          });
-      }
+  if (currentSong) {
+    audio.pause(); 
+    audio.load();
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch((error) => console.error("Playback failed:", error));
     }
-  }, [currentSong]);
+  }
+
+  // Cleanup listeners when component unmounts
+  return () => {
+    audio.removeEventListener('play', handlePlay);
+    audio.removeEventListener('pause', handlePause);
+  };
+}, [currentSong]);
 
   const togglePlay = () => {
     if (audioRef.current) {
