@@ -1,8 +1,15 @@
-'use client'; // This must be at the very top for React hooks to work
+'use client'; 
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
-// Define the structure of our Song data
+// 1. Helper Function (defined outside component for clean code)
+const extractDriveId = (idOrUrl: string) => {
+  if (!idOrUrl) return '';
+  if (idOrUrl.length > 20 && !idOrUrl.includes('/')) return idOrUrl;
+  const match = idOrUrl.match(/\/d\/(.+?)\//) || idOrUrl.match(/id=([^&]+)/);
+  return match ? match[1] : idOrUrl;
+};
+
 interface Song {
   title: string;
   drive_id: string;
@@ -10,43 +17,28 @@ interface Song {
 }
 
 export default function VibeSelector() {
-  // 1. STATE: Track the current theme color and the song data
+  // 2. State & Refs (Must be at the top level)
   const [vibeColor, setVibeColor] = useState('bg-slate-900');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-
-  // 2. REF: Create a reference to the audio element to control play/pause
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  const extractDriveId = (urlOrId: string) => {
-    // If it's a full URL, try to extract the ID
-    const match = urlOrId.match(/\/d\/(.+?)\//);
-    if (match) return match[1];
-    // If it looks like a query param id=...
-    const idMatch = urlOrId.match(/id=([^&]+)/);
-    if (idMatch) return idMatch[1];
-    // Otherwise assume it's the ID itself
-    return urlOrId;
-  };
+  // 3. Side Effect: Watch for song changes and play audio
+  useEffect(() => {
+    if (currentSong && audioRef.current) {
+      audioRef.current.pause(); // Stop current track
+      audioRef.current.load();  // Force browser to fetch new src
+      audioRef.current.play().catch(err => console.log("Playback blocked:", err));
+    }
+  }, [currentSong]);
 
+  // 4. Click Handler
   const handleVibeClick = async (persona: string, color: string) => {
-    // Change the background color immediately
     setVibeColor(color);
-
     try {
-      // Fetch a random song for this persona from your backend
-      // Note: Use 3000 or 3001 depending on where your backend is running!
       const res = await fetch(`https://vibe-selector-api.onrender.com/songs/${persona}`);
       const data = await res.json();
-
       if (data) {
         setCurrentSong(data);
-        // We wait a tiny bit for the <audio> src to update before playing
-        setTimeout(() => {
-          if (audioRef.current) {
-            audioRef.current.load();
-            audioRef.current.play();
-          }
-        }, 100);
       }
     } catch (err) {
       console.error("Could not fetch song:", err);
@@ -54,7 +46,6 @@ export default function VibeSelector() {
   };
 
   return (
-    // The "transition-colors duration-1000" makes the background shift smooth
     <main className={`${vibeColor} min-h-screen transition-colors duration-1000 flex flex-col items-center justify-center p-10`}>
       
       <h1 className="text-white text-6xl font-black mb-16 tracking-tighter italic">
@@ -63,27 +54,25 @@ export default function VibeSelector() {
 
       {/* THE ORBS */}
       <div className="flex gap-12">
-  {/* Ruby Orb */}
-  <button 
-    onClick={() => handleVibeClick('Ruby', 'bg-rose-600')}
-    className="w-44 h-44 rounded-full bg-white/10 border-2 border-white/30 text-white font-bold hover:scale-110 hover:bg-white/20 transition-all shadow-2xl"
-  >
-    Ruby
-  </button>
+        <button 
+          onClick={() => handleVibeClick('Ruby', 'bg-rose-600')}
+          className="w-44 h-44 rounded-full bg-white/10 border-2 border-white/30 text-white font-bold hover:scale-110 hover:bg-white/20 transition-all shadow-2xl"
+        >
+          Ruby
+        </button>
 
-  {/* Marshall Orb */}
-  <button 
-    onClick={() => handleVibeClick('Marshall', 'bg-sky-700')}
-    className="w-44 h-44 rounded-full bg-white/10 border-2 border-white/30 text-white font-bold hover:scale-110 hover:bg-white/20 transition-all shadow-2xl"
-  >
-    Marshall
-  </button>
-</div>
+        <button 
+          onClick={() => handleVibeClick('Marshall', 'bg-sky-700')}
+          className="w-44 h-44 rounded-full bg-white/10 border-2 border-white/30 text-white font-bold hover:scale-110 hover:bg-white/20 transition-all shadow-2xl"
+        >
+          Marshall
+        </button>
+      </div>
 
       {/* HIDDEN AUDIO ELEMENT */}
       <audio 
         ref={audioRef} 
-        src={currentSong ? `https://drive.google.com/uc?export=download&id=${extractDriveId(currentSong.drive_id)}` : undefined} 
+        src={currentSong ? `https://docs.google.com/uc?export=download&id=${extractDriveId(currentSong.drive_id)}` : undefined} 
       />
 
       {/* NOW PLAYING CARD */}
