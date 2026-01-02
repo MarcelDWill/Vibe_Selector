@@ -10,6 +10,8 @@ const extractDriveId = (idOrUrl: string) => {
   return match ? match[1] : idOrUrl;
 };
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector-api.onrender.com';
+
 interface Song {
   title: string;
   drive_id: string;
@@ -20,28 +22,65 @@ export default function VibeSelector() {
   // 2. State & Refs (Must be at the top level)
   const [vibeColor, setVibeColor] = useState('bg-slate-900');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
+  // Add a piece of state to track if music is playing
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
   // 3. Side Effect: Watch for song changes and play audio
+  // 3. Side Effect: Watch for song changes and play audio
   useEffect(() => {
     if (currentSong && audioRef.current) {
-      audioRef.current.pause(); // Stop current track
-      audioRef.current.load();  // Force browser to fetch new src
-      audioRef.current.play().catch(err => console.log("Playback blocked:", err));
+      const audio = audioRef.current;
+
+      // 1. Reset the player
+      audio.pause(); 
+      audio.load();
+
+      // 2. Play returns a Promise - we need to handle it!
+      const playPromise = audio.play();
+
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            // Automatic playback started!
+            console.log("Playback started successfully");
+            setIsPlaying(true);
+          })
+          .catch((error) => {
+            // Auto-play was prevented or interrupted
+            console.error("Playback failed or was interrupted:", error);
+            setIsPlaying(false);
+          });
+      }
     }
   }, [currentSong]);
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch(e => console.error("Playback error:", e));
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
 
   // 4. Click Handler
   const handleVibeClick = async (persona: string, color: string) => {
     setVibeColor(color);
+    setIsLoading(true); // Start loading
     try {
-      const res = await fetch(`https://vibe-selector-api.onrender.com/songs/${persona}`);
+      const res = await fetch(`${API_URL}/songs/${persona}`);
       const data = await res.json();
       if (data) {
         setCurrentSong(data);
       }
     } catch (err) {
       console.error("Could not fetch song:", err);
+    } finally {
+      setIsLoading(false); // End loading once data is set (or error)
     }
   };
 
@@ -75,11 +114,21 @@ export default function VibeSelector() {
         src={currentSong ? `https://docs.google.com/uc?export=download&id=${extractDriveId(currentSong.drive_id)}` : undefined} 
       />
 
+      {/* LOADING INDICATOR */}
+      {isLoading && <p className="text-white animate-pulse mt-8">Tuning into the vibe...</p>}
+
       {/* NOW PLAYING CARD */}
-      {currentSong && (
-        <div className="mt-16 p-6 bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 text-white text-center animate-in fade-in zoom-in duration-500">
-          <p className="text-xs uppercase tracking-widest opacity-60 mb-1">Now streaming</p>
-          <h2 className="text-2xl font-bold">{currentSong.title}</h2>
+      {currentSong && !isLoading && (
+        <div className="mt-8 flex flex-col items-center">
+          <button 
+            onClick={togglePlay}
+            className="mb-4 px-8 py-3 bg-white text-black rounded-full font-bold hover:bg-opacity-90 transition-all"
+          >
+            {isPlaying ? "PAUSE VIBE" : "PLAY VIBE"}
+          </button>
+          <div className="p-6 bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 text-white text-center">
+             <h2 className="text-2xl font-bold">{currentSong.title}</h2>
+          </div>
         </div>
       )}
     </main>
