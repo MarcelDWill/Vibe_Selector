@@ -35,8 +35,8 @@ export default function VibeSelector() {
     try {
       // Fetch a random song for this persona from your backend
       // Note: Use 3000 or 3001 depending on where your backend is running!
-      const response = await fetch(`http://localhost:3000/songs/${persona}`);
-      const data = await response.json();
+      const res = await fetch(`https://vibe-selector-api.onrender.com/songs/${persona}`);
+      const data = await res.json();
 
       if (data) {
         setCurrentSong(data);
