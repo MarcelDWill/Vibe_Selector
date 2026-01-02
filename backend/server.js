@@ -3,7 +3,10 @@ const cors = require('cors'); // 1. Added CORS
 const db = require('./db'); 
 const app = express();
 
-app.use(cors()); // 2. Enable CORS so the frontend can talk to the backend
+const FRONTEND_URL = process.env.FRONTEND_URL || '*';
+app.use(cors({
+    origin: FRONTEND_URL
+}));
 app.use(express.json());
 
 app.get('/songs/:persona', async (req, res) => {
