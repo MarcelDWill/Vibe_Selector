@@ -10,9 +10,10 @@ app.get('/songs/:persona', async (req, res) => {
     try {
         const { persona } = req.params;
         
-        // 3. Changed 'pool.query' to 'db.query' to match your import
         const result = await db.query(
-            "SELECT * FROM songs WHERE persona = $1 ORDER BY RANDOM() LIMIT 1", 
+            // The query string is argument 1
+            "SELECT * FROM songs WHERE LOWER(persona) = LOWER($1) ORDER BY RANDOM() LIMIT 1", 
+            // The values array is argument 2 (Don't forget this!)
             [persona]
         );
         
