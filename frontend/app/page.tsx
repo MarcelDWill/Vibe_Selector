@@ -17,6 +17,17 @@ export default function VibeSelector() {
   // 2. REF: Create a reference to the audio element to control play/pause
   const audioRef = useRef<HTMLAudioElement>(null);
 
+  const extractDriveId = (urlOrId: string) => {
+    // If it's a full URL, try to extract the ID
+    const match = urlOrId.match(/\/d\/(.+?)\//);
+    if (match) return match[1];
+    // If it looks like a query param id=...
+    const idMatch = urlOrId.match(/id=([^&]+)/);
+    if (idMatch) return idMatch[1];
+    // Otherwise assume it's the ID itself
+    return urlOrId;
+  };
+
   const handleVibeClick = async (persona: string, color: string) => {
     // Change the background color immediately
     setVibeColor(color);
@@ -72,7 +83,7 @@ export default function VibeSelector() {
       {/* HIDDEN AUDIO ELEMENT */}
       <audio 
         ref={audioRef} 
-        src={currentSong ? `https://drive.google.com/uc?export=download&id=${currentSong.drive_id}` : ''} 
+        src={currentSong ? `https://drive.google.com/uc?export=download&id=${extractDriveId(currentSong.drive_id)}` : undefined} 
       />
 
       {/* NOW PLAYING CARD */}
