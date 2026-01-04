@@ -115,58 +115,82 @@ app.get("/stream/:driveId", async (req, res, next) => {
   if (!driveId) return res.status(400).json({ message: "Missing driveId" });
 
   const range = req.headers.range;
-  const url = googleDriveApiMediaUrl(driveId) || googleUcFallbackUrl(driveId);
-
   const controller = new AbortController();
   req.on("close", () => controller.abort());
 
-  try {
-    const upstream = await fetch(url, {
-      method: "GET",
-      headers: range ? { Range: range } : undefined,
-      redirect: "follow",
-      signal: controller.signal,
+  const candidates = [];
+
+  const key = process.env.GOOGLE_DRIVE_API_KEY;
+  if (key) {
+    const id = encodeURIComponent(driveId);
+    const k = encodeURIComponent(key);
+    candidates.push({
+      name: "drive-api",
+      url: `https://www.googleapis.com/drive/v3/files/${id}?alt=media&acknowledgeAbuse=true&supportsAllDrives=true&key=${k}`,
     });
+  }
 
-    if (!upstream.ok && upstream.status !== 206) {
-      const text = await upstream.text().catch(() => "");
-      return res.status(502).json({
-        message: "Upstream fetch failed",
-        upstream_status: upstream.status,
-        detail: text.slice(0, 500),
+  candidates.push({
+    name: "uc-fallback",
+    url: `https://drive.google.com/uc?export=download&id=${encodeURIComponent(driveId)}`,
+  });
+
+  try {
+    let lastFailure = null;
+
+    for (const c of candidates) {
+      const upstream = await fetch(c.url, {
+        method: "GET",
+        headers: range ? { Range: range } : undefined,
+        redirect: "follow",
+        signal: controller.signal,
       });
+
+      if (upstream.ok || upstream.status === 206) {
+        res.status(upstream.status);
+
+        const passHeaders = [
+          "content-type",
+          "content-length",
+          "content-range",
+          "accept-ranges",
+          "cache-control",
+          "etag",
+          "last-modified",
+        ];
+
+        for (const h of passHeaders) {
+          const v = upstream.headers.get(h);
+          if (v) res.setHeader(h, v);
+        }
+
+        if (!upstream.body) return res.end();
+
+        const nodeStream =
+          typeof Readable.fromWeb === "function"
+            ? Readable.fromWeb(upstream.body)
+            : upstream.body;
+
+        return nodeStream.pipe(res);
+      }
+
+      const detail = await upstream.text().catch(() => "");
+      lastFailure = {
+        candidate: c.name,
+        upstream_status: upstream.status,
+        detail: detail.slice(0, 500),
+      };
     }
 
-    res.status(upstream.status);
-
-    const passHeaders = [
-      "content-type",
-      "content-length",
-      "content-range",
-      "accept-ranges",
-      "cache-control",
-      "etag",
-      "last-modified",
-    ];
-
-    for (const h of passHeaders) {
-      const v = upstream.headers.get(h);
-      if (v) res.setHeader(h, v);
-    }
-
-    if (!upstream.body) return res.end();
-
-    // Node 18+/20: convert Web ReadableStream to Node stream
-    const nodeStream =
-      typeof Readable.fromWeb === "function"
-        ? Readable.fromWeb(upstream.body)
-        : upstream.body;
-
-    nodeStream.pipe(res);
+    return res.status(502).json({
+      message: "Upstream fetch failed (all candidates)",
+      ...lastFailure,
+    });
   } catch (err) {
     next(err);
   }
 });
+
 
 // JSON 404
 app.use((_req, res) => {

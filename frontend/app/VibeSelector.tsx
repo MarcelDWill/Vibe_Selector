@@ -14,7 +14,7 @@ const extractDriveId = (idOrUrl: string) => {
 };
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector-api.onrender.com';
+  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector.onrender.com';
 
 interface Song {
   title: string;
