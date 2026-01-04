@@ -1,10 +1,11 @@
 // frontend/app/hooks/useAudioPlayer.ts
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 export type UseAudioPlayer = {
-  audioRef: React.RefObject<HTMLAudioElement | null>;
+  // We use a callback ref to ensure we capture the element when it mounts
+  audioRef: (node: HTMLAudioElement | null) => void;
   isPlaying: boolean;
   isLoading: boolean;
   duration: number;
@@ -19,7 +20,8 @@ export type UseAudioPlayer = {
 };
 
 export function useAudioPlayer(): UseAudioPlayer {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // State to hold the actual DOM element
+  const [audioEl, setAudioEl] = useState<HTMLAudioElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -27,97 +29,98 @@ export function useAudioPlayer(): UseAudioPlayer {
   const [currentTime, setCurrentTime] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const setSource = useCallback((src: string | undefined, opts?: { autoplay?: boolean }) => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    setError(null);
-    setIsLoading(Boolean(src));
-
-    audio.pause();
-    audio.removeAttribute('src');
-
-    if (!src) {
-      audio.load();
-      setIsPlaying(false);
-      setDuration(0);
-      setCurrentTime(0);
-      setIsLoading(false);
-      return;
-    }
-
-    audio.src = src;
-    audio.load();
-
-    if (opts?.autoplay) {
-      audio
-        .play()
-        .catch((e) => {
-          console.error('Autoplay blocked:', e);
-          setError('Autoplay blocked. Tap PLAY VIBE.');
-        })
-        .finally(() => setIsLoading(false));
-    } else {
-      setIsLoading(false);
-    }
+  // The ref callback passed to the <audio> tag
+  const audioRef = useCallback((node: HTMLAudioElement | null) => {
+    setAudioEl(node);
   }, []);
 
-  const play = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const setSource = useCallback(
+    (src: string | undefined, opts?: { autoplay?: boolean }) => {
+      if (!audioEl) return;
 
+      setError(null);
+      setIsLoading(Boolean(src));
+
+      audioEl.pause();
+      audioEl.removeAttribute('src');
+
+      if (!src) {
+        audioEl.load();
+        setIsPlaying(false);
+        setDuration(0);
+        setCurrentTime(0);
+        setIsLoading(false);
+        return;
+      }
+
+      audioEl.src = src;
+      audioEl.load();
+
+      if (opts?.autoplay) {
+        audioEl
+          .play()
+          .catch((e) => {
+            console.error('Autoplay blocked:', e);
+            setError('Autoplay blocked. Tap PLAY VIBE.');
+          })
+          .finally(() => setIsLoading(false));
+      } else {
+        setIsLoading(false);
+      }
+    },
+    [audioEl],
+  );
+
+  const play = useCallback(async () => {
+    if (!audioEl) return;
     setError(null);
     try {
-      await audio.play();
+      await audioEl.play();
     } catch (e) {
       console.error('Play failed:', e);
       setError('Could not play audio.');
     }
-  }, []);
+  }, [audioEl]);
 
   const pause = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-  }, []);
+    if (!audioEl) return;
+    audioEl.pause();
+  }, [audioEl]);
 
   const toggle = useCallback(async () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (audio.paused) await play();
+    if (!audioEl) return;
+    if (audioEl.paused) await play();
     else pause();
-  }, [pause, play]);
+  }, [audioEl, play, pause]);
 
   const seek = useCallback(
     (timeSeconds: number) => {
-      const audio = audioRef.current;
-      if (!audio) return;
-
+      if (!audioEl) return;
       const clamped = Math.max(
         0,
         Math.min(timeSeconds, Number.isFinite(duration) ? duration : timeSeconds),
       );
-      audio.currentTime = clamped;
+      audioEl.currentTime = clamped;
     },
-    [duration],
+    [audioEl, duration],
   );
 
-  const setVolume = useCallback((volume01: number) => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const setVolume = useCallback(
+    (volume01: number) => {
+      if (!audioEl) return;
+      audioEl.volume = Math.max(0, Math.min(1, volume01));
+    },
+    [audioEl],
+  );
 
-    audio.volume = Math.max(0, Math.min(1, volume01));
-  }, []);
-
+  // Effect: Attach listeners whenever audioEl changes (mounts)
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!audioEl) return;
 
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
-    const onTimeUpdate = () => setCurrentTime(audio.currentTime || 0);
-    const onLoadedMetadata = () => setDuration(audio.duration || 0);
+    const onTimeUpdate = () => setCurrentTime(audioEl.currentTime || 0);
+    const onLoadedMetadata = () => setDuration(audioEl.duration || 0);
     const onWaiting = () => setIsLoading(true);
     const onCanPlay = () => setIsLoading(false);
     const onError = () => {
@@ -125,24 +128,24 @@ export function useAudioPlayer(): UseAudioPlayer {
       setError('Audio failed to load.');
     };
 
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
-    audio.addEventListener('timeupdate', onTimeUpdate);
-    audio.addEventListener('loadedmetadata', onLoadedMetadata);
-    audio.addEventListener('waiting', onWaiting);
-    audio.addEventListener('canplay', onCanPlay);
-    audio.addEventListener('error', onError);
+    audioEl.addEventListener('play', onPlay);
+    audioEl.addEventListener('pause', onPause);
+    audioEl.addEventListener('timeupdate', onTimeUpdate);
+    audioEl.addEventListener('loadedmetadata', onLoadedMetadata);
+    audioEl.addEventListener('waiting', onWaiting);
+    audioEl.addEventListener('canplay', onCanPlay);
+    audioEl.addEventListener('error', onError);
 
     return () => {
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
-      audio.removeEventListener('timeupdate', onTimeUpdate);
-      audio.removeEventListener('loadedmetadata', onLoadedMetadata);
-      audio.removeEventListener('waiting', onWaiting);
-      audio.removeEventListener('canplay', onCanPlay);
-      audio.removeEventListener('error', onError);
+      audioEl.removeEventListener('play', onPlay);
+      audioEl.removeEventListener('pause', onPause);
+      audioEl.removeEventListener('timeupdate', onTimeUpdate);
+      audioEl.removeEventListener('loadedmetadata', onLoadedMetadata);
+      audioEl.removeEventListener('waiting', onWaiting);
+      audioEl.removeEventListener('canplay', onCanPlay);
+      audioEl.removeEventListener('error', onError);
     };
-  }, []);
+  }, [audioEl]);
 
   return useMemo(
     () => ({
@@ -159,6 +162,19 @@ export function useAudioPlayer(): UseAudioPlayer {
       seek,
       setVolume,
     }),
-    [isPlaying, isLoading, duration, currentTime, error, setSource, play, pause, toggle, seek, setVolume],
+    [
+      audioRef,
+      isPlaying,
+      isLoading,
+      duration,
+      currentTime,
+      error,
+      setSource,
+      play,
+      pause,
+      toggle,
+      seek,
+      setVolume,
+    ],
   );
 }
