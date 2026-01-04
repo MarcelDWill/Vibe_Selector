@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import { useAudioPlayer } from './hooks/useAudioPlayer';
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector-api.onrender.com';
+  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector.onrender.com';
 
 const extractDriveId = (idOrUrl: string) => {
   if (!idOrUrl) return '';

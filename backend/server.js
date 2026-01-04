@@ -40,6 +40,10 @@ app.options(/.*/, cors(corsOptions));
 
 app.use(express.json());
 
+app.get("/", (_req, res) => {
+  res.status(200).json({ ok: true, service: "vibe-selector-api" });
+});
+
 function googleDriveApiMediaUrl(driveId) {
   const key = process.env.GOOGLE_DRIVE_API_KEY;
   if (!key) return null;
