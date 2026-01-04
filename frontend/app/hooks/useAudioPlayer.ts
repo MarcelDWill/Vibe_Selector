@@ -1,9 +1,10 @@
+// frontend/app/hooks/useAudioPlayer.ts
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export type UseAudioPlayer = {
-  audioRef: React.RefObject<HTMLAudioElement>;
+  audioRef: React.RefObject<HTMLAudioElement | null>;
   isPlaying: boolean;
   isLoading: boolean;
   duration: number;
@@ -18,7 +19,7 @@ export type UseAudioPlayer = {
 };
 
 export function useAudioPlayer(): UseAudioPlayer {
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +84,7 @@ export function useAudioPlayer(): UseAudioPlayer {
   const toggle = useCallback(async () => {
     const audio = audioRef.current;
     if (!audio) return;
+
     if (audio.paused) await play();
     else pause();
   }, [pause, play]);
@@ -92,7 +94,10 @@ export function useAudioPlayer(): UseAudioPlayer {
       const audio = audioRef.current;
       if (!audio) return;
 
-      const clamped = Math.max(0, Math.min(timeSeconds, Number.isFinite(duration) ? duration : timeSeconds));
+      const clamped = Math.max(
+        0,
+        Math.min(timeSeconds, Number.isFinite(duration) ? duration : timeSeconds),
+      );
       audio.currentTime = clamped;
     },
     [duration],
@@ -101,6 +106,7 @@ export function useAudioPlayer(): UseAudioPlayer {
   const setVolume = useCallback((volume01: number) => {
     const audio = audioRef.current;
     if (!audio) return;
+
     audio.volume = Math.max(0, Math.min(1, volume01));
   }, []);
 

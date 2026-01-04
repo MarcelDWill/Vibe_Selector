@@ -1,7 +1,13 @@
+// =====================================
 // frontend/app/page.tsx
+// =====================================
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { useAudioPlayer } from './hooks/useAudioPlayer';
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector-api.onrender.com';
 
 const extractDriveId = (idOrUrl: string) => {
   if (!idOrUrl) return '';
@@ -10,8 +16,13 @@ const extractDriveId = (idOrUrl: string) => {
   return match ? match[1] : idOrUrl;
 };
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://vibe-selector-api.onrender.com';
+const formatTime = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0:00';
+  const s = Math.floor(seconds);
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, '0')}`;
+};
 
 interface Song {
   title: string;
@@ -20,68 +31,31 @@ interface Song {
 }
 
 export default function Page() {
+  const player = useAudioPlayer();
+
   const [vibeColor, setVibeColor] = useState('bg-slate-900');
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [isLoadingSong, setIsLoadingSong] = useState(false);
 
-  const audioRef = useRef<HTMLAudioElement>(null);
+  // Scrubbing state for the progress bar
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const [scrubValue, setScrubValue] = useState(0);
 
-  // Keep isPlaying in sync with actual <audio> state.
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    const onPlay = () => setIsPlaying(true);
-    const onPause = () => setIsPlaying(false);
-    const onError = () => setErrorMsg('Audio failed to load/play.');
-
-    audio.addEventListener('play', onPlay);
-    audio.addEventListener('pause', onPause);
-    audio.addEventListener('error', onError);
-
-    return () => {
-      audio.removeEventListener('play', onPlay);
-      audio.removeEventListener('pause', onPause);
-      audio.removeEventListener('error', onError);
-    };
-  }, []);
-
-  // When a new song is set, reload + try autoplay.
-  useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (currentSong) {
-      setErrorMsg(null);
-      audio.pause();
-      audio.load();
-      audio.play().catch((e) => {
-        console.error('Playback failed:', e);
-        setErrorMsg('Browser blocked autoplay. Tap PLAY VIBE.');
-      });
-    }
+  const audioSrc = useMemo(() => {
+    if (!currentSong) return undefined;
+    const driveId = extractDriveId(currentSong.drive_id);
+    if (!driveId) return undefined;
+    return `${API_URL}/stream/${encodeURIComponent(driveId)}`;
   }, [currentSong]);
 
-  const togglePlay = () => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    if (audio.paused) {
-      audio.play().catch((e) => {
-        console.error('Playback error:', e);
-        setErrorMsg('Could not play audio.');
-      });
-    } else {
-      audio.pause();
-    }
-  };
+  const displayedTime = isScrubbing ? scrubValue : player.currentTime;
+  const duration = player.duration || 0;
 
   const handleVibeClick = async (persona: string, color: string) => {
     setVibeColor(color);
-    setIsLoading(true);
-    setErrorMsg(null);
+    setIsLoadingSong(true);
+    setFetchError(null);
 
     try {
       const res = await fetch(`${API_URL}/songs/${encodeURIComponent(persona)}`);
@@ -92,19 +66,36 @@ export default function Page() {
 
       const data = (await res.json()) as Song;
       setCurrentSong(data);
-    } catch (err) {
-      console.error('Could not fetch song:', err);
-      setErrorMsg('Could not fetch song for that artist.');
+
+      const driveId = extractDriveId(data.drive_id);
+      const src = `${API_URL}/stream/${encodeURIComponent(driveId)}`;
+      player.setSource(src, { autoplay: true });
+    } catch (e) {
+      console.error('Could not fetch song:', e);
+      setFetchError('Could not fetch song for that artist.');
       setCurrentSong(null);
+      player.setSource(undefined);
     } finally {
-      setIsLoading(false);
+      setIsLoadingSong(false);
     }
   };
 
-  // PROXY STREAM SOURCE: your backend serves the bytes and supports Range requests.
-  const audioSrc = currentSong
-    ? `${API_URL}/stream/${encodeURIComponent(extractDriveId(currentSong.drive_id))}`
-    : undefined;
+  const onScrubStart = () => {
+    setIsScrubbing(true);
+    setScrubValue(player.currentTime || 0);
+  };
+
+  const onScrubChange = (value: number) => {
+    setScrubValue(value);
+  };
+
+  const onScrubCommit = () => {
+    player.seek(scrubValue);
+    setIsScrubbing(false);
+  };
+
+  const hasSong = Boolean(currentSong && audioSrc);
+  const uiError = fetchError ?? player.error;
 
   return (
     <main
@@ -130,29 +121,76 @@ export default function Page() {
         </button>
       </div>
 
-      <audio ref={audioRef} src={audioSrc} preload="auto" />
+      {/* Single source of truth: hook owns the audio element */}
+      <audio ref={player.audioRef} src={audioSrc} preload="auto" />
 
-      {isLoading && (
+      {(isLoadingSong || player.isLoading) && (
         <p className="text-white animate-pulse mt-8">Tuning into the vibe...</p>
       )}
 
-      {errorMsg && (
+      {uiError && (
         <p className="text-white mt-6 bg-white/10 border border-white/20 rounded-xl px-4 py-2">
-          {errorMsg}
+          {uiError}
         </p>
       )}
 
-      {currentSong && !isLoading && (
-        <div className="mt-8 flex flex-col items-center">
+      {hasSong && !isLoadingSong && (
+        <div className="mt-8 flex flex-col items-center w-full max-w-lg">
           <button
-            onClick={togglePlay}
+            onClick={player.toggle}
             className="mb-4 px-8 py-3 bg-white text-black rounded-full font-bold hover:bg-opacity-90 transition-all"
           >
-            {isPlaying ? 'PAUSE VIBE' : 'PLAY VIBE'}
+            {player.isPlaying ? 'PAUSE VIBE' : 'PLAY VIBE'}
           </button>
 
-          <div className="p-6 bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 text-white text-center">
-            <h2 className="text-2xl font-bold">{currentSong.title}</h2>
+          <div className="p-6 bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 text-white w-full">
+            <div className="text-center mb-4">
+              <h2 className="text-2xl font-bold">{currentSong?.title}</h2>
+              <p className="text-white/80 mt-1">{currentSong?.persona}</p>
+            </div>
+
+            {/* Progress + time */}
+            <div className="flex items-center gap-3">
+              <span className="text-sm tabular-nums text-white/80 w-12 text-right">
+                {formatTime(displayedTime)}
+              </span>
+
+              <input
+                type="range"
+                min={0}
+                max={Math.max(0, duration)}
+                step={0.25}
+                value={Math.min(Math.max(0, displayedTime), Math.max(0, duration))}
+                disabled={!Number.isFinite(duration) || duration <= 0}
+                onMouseDown={onScrubStart}
+                onTouchStart={onScrubStart}
+                onChange={(e) => onScrubChange(Number(e.target.value))}
+                onMouseUp={onScrubCommit}
+                onTouchEnd={onScrubCommit}
+                className="w-full accent-white"
+                aria-label="Seek"
+              />
+
+              <span className="text-sm tabular-nums text-white/80 w-12">
+                {formatTime(duration)}
+              </span>
+            </div>
+
+            {/* Optional: volume (simple) */}
+            <div className="mt-4 flex items-center gap-3">
+              <span className="text-sm text-white/80 w-12 text-right">VOL</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.01}
+                defaultValue={1}
+                onChange={(e) => player.setVolume(Number(e.target.value))}
+                className="w-full accent-white"
+                aria-label="Volume"
+              />
+              <span className="text-sm text-white/80 w-12"> </span>
+            </div>
           </div>
         </div>
       )}
