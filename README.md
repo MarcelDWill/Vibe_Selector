@@ -1,4 +1,6 @@
-Here is a professional and comprehensive **README.md** file for your project. This file summarizes the architecture, setup instructions, and the specific "Vibe Selector" design philosophy you've implemented.
+Care to see this in action? [Vibe-Selector](https://vibe-selector-api.onrender.com) 
+
+Here is a professional and comprehensive **README.md** file for the project. This file summarizes the architecture, setup instructions, and the specific "Vibe Selector" design philosophy implemented.
 
 ---
 
@@ -26,15 +28,15 @@ A sleek, full-stack music streaming application featuring a high-fidelity **Glas
 ### 1. Prerequisites
 
 * Node.js (v18 or higher)
-* A Supabase project with a `songs` table.
+* A Supabase project with a table.
 
 ### 2. Environment Setup
 
 Create a `.env` file in your **backend** folder:
 
 ```env
-DATABASE_URL=postgresql://postgres:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true
-PORT=3000
+DATABASE_URL=
+PORT=
 
 ```
 
@@ -93,6 +95,7 @@ To maintain the custom UI, place the following images in the `frontend/public` d
     Manual Interaction: Due to browser Autoplay Policies, users must manually trigger a new vibe to load the next song. Continuous playback without interaction is not supported to ensure reliable streaming across all browsers.
 
 🛠️ Troubleshooting Guide
+
 1. No Audio Playing (Permissions)
 
     Folder Access: Ensure the Google Drive folder containing your music is set to "Anyone with the link can view.". If the file is private, the stream will return a 403 Forbidden error.
