@@ -1,4 +1,4 @@
-Care to see this in action? [Vibe-Selector](https://vibe-selector-api.onrender.com) 
+Care to see this in action? [Vibe-Selector](https://vibe-selector.vercel.app/)
 
 Here is a professional and comprehensive **README.md** file for the project. This file summarizes the architecture, setup instructions, and the specific "Vibe Selector" design philosophy implemented.
 
@@ -43,7 +43,7 @@ PORT=
 Create a `.env.local` file in your **frontend** folder:
 
 ```env
-NEXT_PUBLIC_API_URL=https://vibe-selector-api.onrender.com
+NEXT_PUBLIC_API_URL=https://vibe-selector.vercel.app/
 
 ```
 
